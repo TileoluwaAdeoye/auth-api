@@ -55,3 +55,17 @@ def login(payload: AuthRequest):
         "access_token": result.session.access_token,
         "refresh_token": result.session.refresh_token
     }
+
+@app.get("/public/info")
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+@app.get("/protected/profile")
+def protected_profile(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer ") or len(auth_header.split(" ")) != 2:
+        raise HTTPException(status_code=401, detail="Access token required")
+
+    token = auth_header.split(" ")[1]
+    # Not verifying the token yet -- that's Stage 3. This just checks one was presented.
+    return {"message": "Token received, verification comes next stage", "token_preview": token[:10] + "..."}
