@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
-from fastapi.security import HTTPBearer
 from pydantic import BaseModel
 from supabase import create_client, Client
 
@@ -15,8 +14,6 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
-
-bearer_scheme = HTTPBearer()
 
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
@@ -78,7 +75,7 @@ def login(payload: AuthRequest):
     }
 
 @app.post("/auth/logout", status_code=204)
-def logout(auth=Depends(get_current_user), _=Depends(bearer_scheme)):
+def logout(auth=Depends(get_current_user)):
     supabase.auth.sign_out()
     return
 
@@ -87,7 +84,7 @@ def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
 @app.get("/protected/profile")
-def protected_profile(auth=Depends(get_current_user), _=Depends(bearer_scheme)):
+def protected_profile(auth=Depends(get_current_user)):
     user = auth["user"]
     return {
         "id": user.id,
@@ -96,6 +93,6 @@ def protected_profile(auth=Depends(get_current_user), _=Depends(bearer_scheme)):
     }
 
 @app.get("/protected/dashboard")
-def protected_dashboard(auth=Depends(get_current_user), _=Depends(bearer_scheme)):
+def protected_dashboard(auth=Depends(get_current_user)):
     user = auth["user"]
     return {"message": f"Welcome to your dashboard, {user.email}"}
