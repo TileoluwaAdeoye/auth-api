@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from pydantic import BaseModel
@@ -22,6 +22,24 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 class AuthRequest(BaseModel):
     email: str = None
     password: str = None
+
+# --- The reusable guard (FastAPI "dependency") ---
+def get_current_user(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer ") or len(auth_header.split(" ")) != 2:
+        raise HTTPException(status_code=401, detail="Access token required")
+
+    token = auth_header.split(" ")[1]
+
+    try:
+        user_response = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if not user_response or not user_response.user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return {"user": user_response.user, "token": token}
 
 @app.get("/")
 def read_root():
@@ -56,29 +74,25 @@ def login(payload: AuthRequest):
         "refresh_token": result.session.refresh_token
     }
 
+@app.post("/auth/logout", status_code=204)
+def logout(auth=Depends(get_current_user)):
+    supabase.auth.sign_out()
+    return
+
 @app.get("/public/info")
 def public_info():
     return {"message": "Welcome stranger! This info is public."}
 
 @app.get("/protected/profile")
-def protected_profile(request: Request):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer ") or len(auth_header.split(" ")) != 2:
-        raise HTTPException(status_code=401, detail="Access token required")
-
-    token = auth_header.split(" ")[1]
-
-    try:
-        user_response = supabase.auth.get_user(token)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    if not user_response or not user_response.user:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user = user_response.user
+def protected_profile(auth=Depends(get_current_user)):
+    user = auth["user"]
     return {
         "id": user.id,
         "email": user.email,
         "created_at": user.created_at
     }
+
+@app.get("/protected/dashboard")
+def protected_dashboard(auth=Depends(get_current_user)):
+    user = auth["user"]
+    return {"message": f"Welcome to your dashboard, {user.email}"}
